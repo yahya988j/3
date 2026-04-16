@@ -72,6 +72,13 @@
         input:checked + .slider:before { transform: translateX(26px); }
 
         .history-item { border-bottom: 1px solid rgba(212,175,55,0.1); padding: 10px 0; font-size: 12px; }
+        
+        /* تنسيق سجلات الدفع الجديدة */
+        .payment-record-card { background: rgba(0,0,0,0.3); border-left: 4px solid var(--gold); padding: 12px; margin-bottom: 10px; border-radius: 10px; font-size: 12px; }
+        
+        /* وسام المكافأة */
+        .reward-badge { background: linear-gradient(45deg, var(--gold), #fff); color: #000; padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 10px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -132,14 +139,32 @@
         <div class="card" style="text-align:center;">
             <p>إجمالي أرباحك الصافية</p>
             <h1 id="today-profit">0 ل.س</h1>
+            <div id="monthly-reward-banner" style="display: none; margin-top: 10px;">
+                <span class="reward-badge"><i class="fas fa-trophy"></i> تستحق مكافأة الأداء العالي!</span>
+            </div>
         </div>
-        <div class="card" style="border-color: #3498db;">
-            <p style="color:#3498db;"><i class="fas fa-building"></i> مستحقات الشركة</p>
-            <h3 id="company-due">0 ل.س</h3>
-            <button class="btn-gold" style="background:#3498db; color:#fff; font-size: 12px;" onclick="payCompany()"><i class="fas fa-check-double"></i> تسليم أرباح الشركة للإدارة</button>
+        <div class="card" style="border-color: var(--gold); background: rgba(212, 175, 55, 0.05);">
+            <p style="color:var(--gold);"><i class="fas fa-building"></i> مستحقات الشركة (15% من التوصيل)</p>
+            <h3 id="company-due" style="color: #fff;">0 ل.س</h3>
+            <div id="settlement-code-display" style="display:none; margin: 10px 0; padding: 10px; background: #000; border-radius: 10px; border: 1px dashed var(--gold);">
+                <span style="font-size: 11px; color: var(--gold); display: block;">كود التصفية للمدير (للمرة الواحدة):</span>
+                <b id="current-settlement-code" style="font-size: 20px; letter-spacing: 3px;">----</b>
+            </div>
+            <button id="btn-gen-code" class="btn-gold" style="background:var(--gold); color:#000; font-size: 12px;" onclick="generateSettlementCode()"><i class="fas fa-key"></i> توليد كود التصفية للإدارة</button>
+            <small style="color: #aaa; font-size: 9px; margin-top: 5px; display: block; text-align: center;">* بمجرد استخدام الكود سيختفي من التطبيق تلقائياً</small>
         </div>
-        <h3 style="color:var(--gold);"><i class="fas fa-history"></i> سجل صقور شاهين</h3>
+        <h3 style="color:var(--gold);"><i class="fas fa-history"></i> سجل العمليات الملون</h3>
         <div id="transactions-list" class="card" style="max-height: 250px; overflow-y: auto;"></div>
+    </div>
+
+    <div id="p-finance-history" class="page">
+        <h2 style="color:var(--gold); text-align:center;">سجل دفعات الإدارة 📋</h2>
+        <div class="card" style="background: rgba(212, 175, 55, 0.05); text-align: center;">
+            <p style="font-size: 13px;">هنا تظهر كافة المبالغ التي قمت بتسليمها للشركة</p>
+        </div>
+        <div id="payment-history-list" style="margin-top: 10px;">
+            <p style="text-align: center; color: #888; font-size: 12px;">لا يوجد سجلات دفع حالية</p>
+        </div>
     </div>
 
     <div id="p-profile" class="page">
@@ -223,9 +248,10 @@
     </div>
 
     <div class="tab-bar" id="main-tabs" style="display: none;">
-        <div class="tab-item active" id="t-main" onclick="nav('p-main')"><i class="fas fa-search-location"></i>الطلبات المتاحة</div>
-        <div class="tab-item" id="t-active" onclick="checkActiveAndNav()"><i class="fas fa-box-open"></i>الطلبات المستلمة</div>
-        <div class="tab-item" id="t-wallet" onclick="nav('p-wallet')"><i class="fas fa-wallet"></i>الأرباح</div>
+        <div class="tab-item active" id="t-main" onclick="nav('p-main')"><i class="fas fa-search-location"></i>الطلبات</div>
+        <div class="tab-item" id="t-active" onclick="checkActiveAndNav()"><i class="fas fa-box-open"></i>مستلمة</div>
+        <div class="tab-item" id="t-wallet" onclick="nav('p-wallet')"><i class="fas fa-wallet"></i>المحفظة</div>
+        <div class="tab-item" id="t-finance" onclick="nav('p-finance-history')"><i class="fas fa-file-invoice-dollar"></i>السجلات</div>
         <div class="tab-item" id="t-profile" onclick="nav('p-profile')"><i class="fas fa-user-tie"></i>حسابي</div>
     </div>
 </div>
@@ -311,8 +337,28 @@
                     document.getElementById('suspend-modal').style.display = 'none';
                     document.getElementById('main-tabs').style.display = 'flex';
                 }
+                
                 if(d && d.rating) {
                    document.getElementById('driver-rating-val').innerText = d.rating.toFixed(1);
+                   checkMonthlyReward(d.rating, d.weeklyOrders);
+                }
+                
+                if(d && d.settlementCode) {
+                    document.getElementById('current-settlement-code').innerText = d.settlementCode;
+                    document.getElementById('settlement-code-display').style.display = 'block';
+                    document.getElementById('btn-gen-code').style.display = 'none';
+                } else {
+                    document.getElementById('settlement-code-display').style.display = 'none';
+                    document.getElementById('btn-gen-code').style.display = 'flex';
+                }
+
+                if(d && d.weeklyOrders !== undefined) {
+                    // تصحيح الحساب: 15% من سعر التوصيل بشكل مباشر ودقيق
+                    const deliveryPriceVal = 15000; 
+                    const companyDueVal = d.weeklyOrders * deliveryPriceVal * 0.15; 
+                    localStorage.setItem('sh_company_due', companyDueVal);
+                    document.getElementById('company-due').innerText = companyDueVal.toFixed(0) + " ل.س";
+                    document.getElementById('total-orders-count').innerText = d.weeklyOrders;
                 }
             });
 
@@ -338,6 +384,7 @@
             nav('p-main');
             startAdminTracking();
             loadOrderHistory();
+            loadPaymentHistory();
 
             const activeID = localStorage.getItem('active_order_id');
             if(activeID) {
@@ -347,6 +394,47 @@
         }
     }
     initSystem();
+
+    function checkMonthlyReward(rating, orders) {
+        const banner = document.getElementById('monthly-reward-banner');
+        if(rating >= 4.9 && orders > 20) { banner.style.display = 'block'; }
+        else { banner.style.display = 'none'; }
+    }
+
+    function loadPaymentHistory() {
+        if(!currentUserData) return;
+        rdb.ref('sh_payment_history/' + currentUserData.key).on('value', snap => {
+            const list = document.getElementById('payment-history-list');
+            list.innerHTML = "";
+            const payments = snap.val();
+            if(payments) {
+                Object.values(payments).reverse().forEach(p => {
+                    const date = new Date(p.date).toLocaleDateString('ar-EG');
+                    const color = p.type === 'full' ? '#2ecc71' : '#f1c40f';
+                    list.innerHTML += `
+                        <div class="payment-record-card">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                                <b style="color:var(--gold);">تصفية حساب</b>
+                                <small>${date}</small>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:11px;">
+                                <span>المبلغ المسلم: <b style="color:${color}">${p.paid} ل.س</b></span>
+                                <span>المتبقي: <b>${p.due - p.paid} ل.س</b></span>
+                            </div>
+                        </div>`;
+                });
+            } else {
+                list.innerHTML = `<p style="text-align: center; color: #888; font-size: 12px;">لا يوجد سجلات دفع حالية</p>`;
+            }
+        });
+    }
+
+    function generateSettlementCode() {
+        if(!currentUserData) return;
+        const newCode = Math.floor(1000 + Math.random() * 9000); 
+        rdb.ref('sh_drivers/' + currentUserData.key).update({ settlementCode: newCode });
+        siteNotify("تم توليد الكود للاستخدام الواحد! أعطه للإدارة 🦅");
+    }
 
     function loadOrderHistory() {
         if(!currentUserData) return;
@@ -359,7 +447,7 @@
                     const stars = o.rating ? '⭐'.repeat(o.rating) : 'تم التوصيل ✅';
                     const orderDate = o.completedAt ? new Date(o.completedAt).toLocaleString('ar-EG') : 'تاريخ غير معروف';
                     hList.innerHTML += `
-                        <div class="history-item" style="border-bottom: 1px solid #333; padding: 12px 5px;">
+                        <div class="history-item" style="border-bottom: 1px solid #333; padding: 12px 5px; background: rgba(46, 204, 113, 0.08); border-right: 4px solid #2ecc71;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                                 <b style="color:var(--gold);">${o.res || 'مطعم'}</b>
                                 <span style="font-size:10px; color:#888;">${orderDate}</span>
@@ -368,8 +456,8 @@
                                 <i class="fas fa-user"></i> العميل: <b>${o.customer || 'غير معروف'}</b>
                             </div>
                             <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="color:#2ecc71;">${o.total || 0} ل.س</span>
-                                <span style="font-size:11px; background:rgba(212,175,55,0.1); padding:2px 6px; border-radius:5px;">${stars}</span>
+                                <span style="color:#2ecc71; font-weight:bold;">${o.total || 0} ل.س</span>
+                                <span style="font-size:11px; background:rgba(212,175,55,0.1); padding:2px 6px; border-radius:5px; color: #fff;">${stars}</span>
                             </div>
                         </div>`;
                 });
@@ -381,7 +469,7 @@
         rdb.ref('sh_public_orders/' + key).once('value', snap => {
             const o = snap.val();
             if(o && o.status === 'accepted') {
-                const delFee = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 0;
+                const delFee = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 15000;
                 const totVal = o.total || 0;
                 const payMethod = o.payMethod === 'points' ? 'نقاط الشاهين 💎' : 'نقداً 💵';
                 const itemsList = Array.isArray(o.items) ? o.items.map(i => `${i.n} (${i.p} ل.س)`).join('\n') : (o.items || o.order_details || 'لم يتم تحديد الوجبات');
@@ -468,15 +556,7 @@
     }
 
     function payCompany() {
-        const due = parseFloat(document.getElementById('company-due').innerText);
-        if(due <= 0) { siteNotify("لا يوجد مستحقات حالية للشركة"); return; }
-        siteNotify("جاري معالجة تسليم الأرباح...");
-        setTimeout(() => {
-            rdb.ref('sh_payments').push({ driver: currentUserData.name, amount: due, date: Date.now() });
-            document.getElementById('company-due').innerText = "0 ل.س";
-            localStorage.setItem('sh_company_due', '0');
-            siteNotify("تم تصفير حساب الشركة وإرسال إشعار للإدارة ✅");
-        }, 1000);
+        generateSettlementCode();
     }
 
     function refreshOrders() {
@@ -495,7 +575,7 @@
         Object.keys(orders).forEach(key => {
             const o = orders[key];
             if(o.status === 'searching') {
-                const delFeeDisplay = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 0;
+                const delFeeDisplay = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 15000;
                 const payMethod = o.payMethod === 'points' ? 'نقاط الشاهين 💎' : 'نقداً 💵';
                 const restaurantWorkStatus = o.resStatus === 'closed' ? '<span style="color:#ff7675; font-size:10px;">(مغلق حالياً ⛔)</span>' : '<span style="color:#55efc4; font-size:10px;">(مفتوح للعمل ✅)</span>';
                 const itemsShort = Array.isArray(o.items) ? o.items.map(i => i.n).join(', ') : (o.items || 'محتوى السلة');
@@ -503,7 +583,7 @@
                 list.innerHTML += `
                     <div class="card" style="border-right: 4px solid var(--gold); position: relative;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <b style="font-size:16px;">${o.res} ${restaurantWorkStatus}</b>
+                            <button class="btn-gold" style="width: auto; padding: 5px 10px; margin: 0; font-size: 10px; background: transparent; border: 1px solid var(--gold); color: var(--gold);">${o.res}</button>
                             <b style="color:#2ecc71; font-size:16px;">${o.total} ل.س</b>
                         </div>
                         <div style="margin: 8px 0; font-size: 11px; color: #ccc; line-height: 1.5;">
@@ -643,10 +723,11 @@
             }
 
             closeConfirmModal();
-            const deliveryFee = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 0; 
-            const dPercent = currentUserData.driverPercent || 0.8;
-            const cPercent = currentUserData.companyPercent || 0.2;
+            const deliveryFee = o.deliveryFee || o.deliveryPrice || o.delivery_fee || 15000; 
+            const dPercent = 0.85;
+            const cPercent = 0.15;
             
+            // تصحيح الحساب: النسبة من سعر التوصيل بشكل مباشر ودقيق
             let driverProfit = deliveryFee * dPercent;
             let companyProfit = deliveryFee * cPercent;
 
@@ -669,6 +750,8 @@
                 financials: { total: o.total, deliveryFee: deliveryFee, driverProfit: driverProfit, companyProfit: companyProfit, payMethod: o.payMethod || 'cash' }
             });
             rdb.ref('sh_orders/' + currentOrderID).update({ status: 'completed', completedAt: Date.now() });
+
+            rdb.ref('sh_drivers/' + currentUserData.key + '/weeklyOrders').transaction(current => (current || 0) + 1);
 
             orderCount++;
             const newTodayProfit = parseFloat(localStorage.getItem('sh_today_profit') || '0') + driverProfit;
@@ -699,6 +782,7 @@
         if(id === 'p-main') document.getElementById('t-main').classList.add('active');
         if(id === 'p-active-order') document.getElementById('t-active').classList.add('active');
         if(id === 'p-wallet') { document.getElementById('t-wallet').classList.add('active'); loadOrderHistory(); }
+        if(id === 'p-finance-history') { document.getElementById('t-finance').classList.add('active'); loadPaymentHistory(); }
         if(id === 'p-profile') document.getElementById('t-profile').classList.add('active');
     }
 </script>
