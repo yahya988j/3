@@ -268,7 +268,9 @@
         if(!code) { siteNotify("الرجاء إدخال كود التفعيل يا صقر"); return; }
         btn.disabled = true; btn.innerText = "جاري التحقق...";
 
+        const connTimeout = setTimeout(() => { if(btn.disabled) { btn.disabled = false; btn.innerText = "دخول النظام"; siteNotify("فشل الاتصال.. تأكد من قوة الـ VPN ونوع السيرفر 🦅"); } }, 12000);
         rdb.ref('sh_drivers').once('value', snap => {
+            clearTimeout(connTimeout);
             const drivers = snap.val();
             let found = false;
             for(let id in drivers) {
