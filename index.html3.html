@@ -13449,11 +13449,14 @@ setTimeout(() => {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             // استخدام jsQR إن كان محملاً، وإلا إيجاد بديل
             if (typeof jsQR === 'undefined') {
-                // jsQR غير محمّل — نُحمّله ديناميكياً
+                // [BUGFIX-BROKEN-JSQR-PATH] كان يحاول تحميل ملف محلي 'vendor/jsQR.js' غير
+                // موجود إطلاقاً (التطبيق ملف واحد بدون مجلد vendor مرفق) — هذا كان يمنع مسح
+                // رمز QR للدفع بشكل كامل وبصمت (بدون أي رسالة خطأ ظاهرة للمستخدم). الحل:
+                // تحميل المكتبة من CDN حقيقي بدلاً من مسار محلي وهمي
                 if (!window._jsqrLoading) {
                     window._jsqrLoading = true;
                     const s = document.createElement('script');
-                    s.src = 'vendor/jsQR.js';
+                    s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
                     document.head.appendChild(s);
                 }
                 return;
