@@ -13509,10 +13509,16 @@ setTimeout(() => {
         if (btn) { btn.disabled = true; btn.innerText = 'جاري الدفع...'; }
         const p = _sppClientPaymentData;
         try {
-            // [SEC-FIX-QR-PAYMENT] استبدال التحديث المباشر + adjust_customer_points المنفصلة
-            // (كان التحقق من كفاية الرصيد بالواجهة فقط، قابل للتجاوز بسهولة) بدالة واحدة ذرّية
-            // تتحقق من الرصيد فعليًا بالخادم وتخصم وتُعلِّم "مدفوع" معًا أو تفشل الاثنين معًا
-            const { data: result, error: rpcErr } = await _supabase.rpc('confirm_shahin_points_payment', { p_qr_token: p.qr_token });
+            // [FIX-HANGING-CONFIRM] كان الطلب بدون أي مهلة زمنية — لو تأخّر الإنترنت أو
+            // الخادم، الزر يضل عالق "جاري الدفع..." للأبد بدون أي رسالة خطأ. أضفنا مهلة
+            // أمان 15 ثانية تفشل العملية بوضوح بدل التعليق الصامت
+            const _confirmTimeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('انتهت مهلة الاتصال — تحقّقي من الإنترنت وحاولي مجدداً')), 15000)
+            );
+            const { data: result, error: rpcErr } = await Promise.race([
+                _supabase.rpc('confirm_shahin_points_payment', { p_qr_token: p.qr_token }),
+                _confirmTimeoutPromise
+            ]);
             if (rpcErr) throw new Error(rpcErr.message);
             if (!result || !result.success) {
                 const errMsg = result && result.error === 'insufficient_points'
