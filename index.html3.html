@@ -82,6 +82,14 @@ button,input,a{font:inherit}
 .nope{display:grid;gap:10px;text-align:center;padding:4px 2px}
 .nope{border:1.5px solid rgba(255,107,107,.55);border-radius:18px;background:rgba(255,107,107,.08);padding:18px 14px}
 .warn{width:46px;height:46px;margin:0 auto;border-radius:50%;display:grid;place-items:center;background:#ff6b6b;color:#2a0505;font-size:28px;font-weight:800}
+.dup{border-color:rgba(240,193,75,.6);background:rgba(240,193,75,.09)}
+.won{display:grid;gap:4px;padding:14px;border-radius:14px;background:rgba(240,193,75,.14);border:1px solid var(--line)}
+.won small{color:var(--muted);font-size:14px}
+.won b{color:var(--gold-hi);font-size:24px;font-weight:800;text-wrap:balance}
+.dcode{display:grid;gap:6px;justify-items:center;padding:14px;border-radius:14px;border:2px dashed var(--gold);background:rgba(240,193,75,.08)}
+.dcode small,.dcode span{color:var(--muted);font-size:14px}
+.dcode b{font-size:28px;letter-spacing:1.5px;color:var(--gold-hi);font-weight:800;user-select:all}
+.dup .warn{background:var(--gold);color:#2a1500;font-size:20px}
 .nope p b{color:var(--ivory)}
 .nope h2{font-size:22px;font-weight:800;color:var(--gold-hi);text-wrap:balance}
 .nope p{color:var(--muted);font-size:16px}
@@ -152,6 +160,19 @@ button,input,a{font:inherit}
       <p class="status" id="status" role="status" aria-live="polite"></p>
       <p class="hint">لفّة واحدة لكل عميل.</p>
       <a class="btn ghost" id="signup0" href="https://www.shahinapp.com/" target="_blank" rel="noopener">ما عندي حساب؟ أنشئ حساباً</a>
+    </div>
+    <div class="nope dup" id="dup" hidden>
+      <div class="warn" aria-hidden="true">2×</div>
+      <h2>مكرّر: هذا الرقم لفّ من قبل</h2>
+      <div class="won" id="dupPrize" hidden><small>الجائزة التي ربحتها</small><b id="dupLabel"></b></div>
+      <div class="dcode" id="dupCode" hidden>
+        <small>كود الخصم الخاص بك</small>
+        <b id="dupCodeTxt" dir="ltr"></b>
+        <span id="dupCodeNote"></span>
+        <button class="copy" id="dupCopy" type="button">نسخ الكود</button>
+      </div>
+      <p id="dupMsg">اللفّة واحدة فقط لكل عميل.</p>
+      <button class="btn ghost" id="retry2" type="button">جرّب رقماً آخر</button>
     </div>
     <div class="nope" id="nope" hidden>
       <div class="warn" aria-hidden="true">!</div>
@@ -286,7 +307,7 @@ $('phone').addEventListener('input',function(){
     rpc('get_wheel_state',{p_phone:ph}).then(function(s){
       if(seq!==chkSeq||busy) return;
       if(s.has_account===false){ $('formMain').hidden=true; $('nope').hidden=false; }
-      else if(s.already_spun){ say('لفّيت الدولاب من قبل. اللفّة واحدة لكل عميل.'); }
+      else if(s.already_spun){ showDup(s); }
     }).catch(function(){});
   },450);
 });
@@ -298,12 +319,29 @@ var ERR={
   no_prizes_configured:'الدولاب غير جاهز حالياً. جرّب لاحقاً.',
   net:'تعذّر الاتصال. تأكد من الإنترنت وجرّب مرة ثانية.'
 };
+function showDup(st){
+  st=st||{}; var label=st.prize_label||'';
+  $('dupLabel').textContent=label; $('dupPrize').hidden=!label;
+  var hc=!!st.coupon_code; $('dupCode').hidden=!hc;
+  if(hc){
+    $('dupCodeTxt').textContent=st.coupon_code;
+    $('dupCodeNote').textContent=st.coupon_used?'هذا الكود مستخدَم من قبل.':'اكتبه في خانة الكوبون بسلة الطلب، وصالح لغاية '+fmtDate(st.coupon_expires_at)+'.';
+    $('dupCopy').textContent='نسخ الكود'; $('dupCopy').className='copy';
+  }
+  $('formMain').hidden=true; $('nope').hidden=true; $('dup').hidden=false; say('');
+}
 function fail(code,r){
   if(code==='no_account'){ $('formMain').hidden=true; $('nope').hidden=false; $('signup').focus(); return; }
-  if(code==='already_spun'){ say('لفّيت الدولاب من قبل'+(r&&r.prize_label?' وربحت: '+r.prize_label:'')+'. اللفّة واحدة لكل عميل.'); return; }
+  if(code==='already_spun'){
+    showDup({prize_label:r&&r.prize_label});
+    rpc('get_wheel_state',{p_phone:localPhone()}).then(function(s){ if(s&&s.already_spun) showDup(s); }).catch(function(){});
+    return;
+  }
   say(ERR[code]||ERR.net);
 }
-$('retry').addEventListener('click',function(){$('nope').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()});
+function again(){$('dup').hidden=true;$('nope').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()}
+$('retry2').addEventListener('click',again);
+$('retry').addEventListener('click',function(){$('dup').hidden=true;$('nope').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()});
 
 $('form').addEventListener('submit',function(ev){
   ev.preventDefault(); if(busy||!prizes.length) return;
@@ -347,6 +385,12 @@ $('veil').addEventListener('click',function(e){if(e.target===this)closePrize()})
 document.addEventListener('keydown',function(e){ if($('veil').hidden)return; if(e.key==='Escape')closePrize();
   if(e.key==='Tab'){var f=[].filter.call($('veil').querySelectorAll('button,a[href]'),function(x){return x.offsetParent!==null}); if(!f.length)return; var a=f[0],z=f[f.length-1];
     if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus()} else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()}}});
+$('dupCopy').addEventListener('click',function(){
+  var code=$('dupCodeTxt').textContent, b=this;
+  function ok(){b.textContent='تم النسخ ✓';b.className='copy done'}
+  function fb(){var r=document.createRange();r.selectNodeContents($('dupCodeTxt'));var g=getSelection();g.removeAllRanges();g.addRange(r);try{document.execCommand('copy');ok()}catch(e){}}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(code).then(ok,fb)} else fb();
+});
 $('copy').addEventListener('click',function(){
   var code=$('pCode').textContent, b=this;
   function ok(){b.textContent='تم النسخ ✓';b.className='copy done'}
