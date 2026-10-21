@@ -399,6 +399,12 @@ $('form').addEventListener('submit',function(ev){
   ev.preventDefault(); if(busy||!prizes.length) return;
   var ph=localPhone(); if(ph.length<12){ say(ERR.invalid_phone); $('phone').focus(); return; }
   say(''); lock(true); ac();
+  // رقم صاحب المحل يفتح الإحصائيات ولا يلفّ
+  rpc('get_wheel_state',{p_phone:ph}).then(function(st){
+    if(st&&st.is_owner){ lock(false); showStats(ph); } else startSpin(ph);
+  }).catch(function(){ startSpin(ph); });
+});
+function startSpin(ph){
   var outcome=null; // يُملأ عند وصول رد الخادم
   var req=rpc('spin_lucky_wheel',{p_phone:ph}).then(function(r){outcome=r}).catch(function(){outcome={ok:false,error:'net'}});
   $('wheelbox').classList.remove('has-winner'); [].forEach.call(document.querySelectorAll('.seg.win'),function(e){e.classList.remove('win')});
@@ -413,7 +419,7 @@ $('form').addEventListener('submit',function(ev){
     var segs=document.querySelectorAll('.seg'); if(segs[res.idx]) segs[res.idx].classList.add('win'); $('wheelbox').classList.add('has-winner');
     fanfare(); burst(); setTimeout(function(){showPrize(outcome)},reduce?0:900);
   });
-});
+}
 
 function fmtDate(iso){try{return new Date(iso).toLocaleDateString('ar-SY-u-nu-latn',{day:'numeric',month:'long',timeZone:'Asia/Damascus'})}catch(e){return ''}}
 var lastFocus=null;
