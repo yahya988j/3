@@ -83,6 +83,19 @@ button,input,a{font:inherit}
 .nope{border:1.5px solid rgba(255,107,107,.55);border-radius:18px;background:rgba(255,107,107,.08);padding:18px 14px}
 .warn{width:46px;height:46px;margin:0 auto;border-radius:50%;display:grid;place-items:center;background:#ff6b6b;color:#2a0505;font-size:28px;font-weight:800}
 .dup{border-color:rgba(240,193,75,.6);background:rgba(240,193,75,.09)}
+.stats{display:grid;gap:12px;text-align:center}
+.stats h2{font-size:22px;font-weight:800;color:var(--gold-hi)}
+.stats h3{font-size:17px;font-weight:700;color:var(--gold);text-align:right;margin-top:4px}
+.stats .sub{color:var(--muted);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpis div{padding:10px 4px;border-radius:12px;background:rgba(240,193,75,.1);border:1px solid var(--line);display:grid;gap:2px}
+.kpis b{font-size:28px;color:var(--gold-hi);font-weight:800}
+.kpis small{font-size:12px;color:var(--muted)}
+.st{width:100%;border-collapse:collapse;font-size:15px}
+.st td{padding:8px 6px;border-bottom:1px solid rgba(240,193,75,.14);text-align:right;vertical-align:middle}
+.st td.n{text-align:left;font-weight:800;color:var(--gold-hi);white-space:nowrap}
+.st .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-inline-start:8px;vertical-align:middle}
+.st .m{color:var(--muted);font-size:13px}
 .won{display:grid;gap:4px;padding:14px;border-radius:14px;background:rgba(240,193,75,.14);border:1px solid var(--line)}
 .won small{color:var(--muted);font-size:14px}
 .won b{color:var(--gold-hi);font-size:24px;font-weight:800;text-wrap:balance}
@@ -173,6 +186,20 @@ button,input,a{font:inherit}
       </div>
       <p id="dupMsg">اللفّة واحدة فقط لكل عميل.</p>
       <button class="btn ghost" id="retry2" type="button">جرّب رقماً آخر</button>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <h2>إحصائيات الدولاب</h2>
+      <p class="sub" id="stCamp"></p>
+      <div class="kpis">
+        <div><b id="stPlayers">0</b><small>لعبوا الدولاب</small></div>
+        <div><b id="stIssued">0</b><small>كودات صدرت</small></div>
+        <div><b id="stUsed">0</b><small>كودات استُخدمت</small></div>
+      </div>
+      <h3>الجوائز</h3>
+      <table class="st"><tbody id="stPrizes"></tbody></table>
+      <h3>آخر اللاعبين</h3>
+      <table class="st"><tbody id="stRecent"></tbody></table>
+      <button class="btn ghost" id="stBack" type="button">رجوع</button>
     </div>
     <div class="nope" id="nope" hidden>
       <div class="warn" aria-hidden="true">!</div>
@@ -306,6 +333,7 @@ $('phone').addEventListener('input',function(){
   chkT=setTimeout(function(){
     rpc('get_wheel_state',{p_phone:ph}).then(function(s){
       if(seq!==chkSeq||busy) return;
+      if(s.is_owner){ showStats(ph); return; }
       if(s.has_account===false){ $('formMain').hidden=true; $('nope').hidden=false; }
       else if(s.already_spun){ showDup(s); }
     }).catch(function(){});
@@ -339,6 +367,30 @@ function fail(code,r){
   }
   say(ERR[code]||ERR.net);
 }
+function td(t,cls){var c=document.createElement('td');c.textContent=t;if(cls)c.className=cls;return c}
+function showStats(ph){
+  rpc('get_wheel_stats',{p_phone:ph}).then(function(d){
+    if(!d||!d.ok) return;
+    $('stCamp').textContent=d.campaign||'';
+    $('stPlayers').textContent=d.players; $('stIssued').textContent=d.coupons_issued; $('stUsed').textContent=d.coupons_used;
+    var pb=$('stPrizes'); pb.textContent='';
+    (d.by_prize||[]).forEach(function(r){
+      var tr=document.createElement('tr'), c=document.createElement('td'), dot=document.createElement('span');
+      dot.className='dot'; dot.style.background=r.color||'#888'; c.appendChild(dot); c.appendChild(document.createTextNode(r.label));
+      tr.appendChild(c); tr.appendChild(td(r.wins,'n')); pb.appendChild(tr);
+    });
+    var rb=$('stRecent'); rb.textContent='';
+    if(!(d.recent||[]).length){ var e=document.createElement('tr'); e.appendChild(td('لا أحد لعب بعد.','m')); rb.appendChild(e); }
+    (d.recent||[]).forEach(function(r){
+      var tr=document.createElement('tr'), c=document.createElement('td');
+      c.appendChild(document.createTextNode(r.name+' '));
+      var m=document.createElement('span'); m.className='m'; m.dir='ltr'; m.textContent=r.phone; c.appendChild(m);
+      tr.appendChild(c); tr.appendChild(td(r.prize)); rb.appendChild(tr);
+    });
+    $('formMain').hidden=true; $('nope').hidden=true; $('dup').hidden=true; $('stats').hidden=false;
+  }).catch(function(){});
+}
+$('stBack').addEventListener('click',function(){$('stats').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()});
 function again(){$('dup').hidden=true;$('nope').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()}
 $('retry2').addEventListener('click',again);
 $('retry').addEventListener('click',function(){$('dup').hidden=true;$('nope').hidden=true;$('formMain').hidden=false;$('phone').value='';say('');$('phone').focus()});
